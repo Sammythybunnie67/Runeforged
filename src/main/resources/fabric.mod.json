@@ -3,10 +3,10 @@
   "id": "runeforged",
   "version": "${version}",
 
-  "name": "Example Mod",
-  "description": "This mod aims to help new BTA modders.",
+  "name": "Runeforged",
+  "description": "Runeforged is a mod for runes.",
   "authors": [
-    "Turnip Labs"
+    "sammythybunnie67"
   ],
   "contact": {
     "homepage": "",
