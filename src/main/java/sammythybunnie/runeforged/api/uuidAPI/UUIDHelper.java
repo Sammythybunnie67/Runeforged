@@ -4,8 +4,11 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import net.fabricmc.api.ClientModInitializer;
-import net.minecraft.core.net.PlayerProfile;
+import net.minecraft.core.entity.player.EntityPlayer;
+import net.minecraft.server.entity.player.EntityPlayerMP;
 
+import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -17,26 +20,32 @@ import java.util.UUID;
 public class UUIDHelper implements ClientModInitializer {
     private static final HashMap<String, UUID> playerDataMapping = new HashMap<>();
     private static final Map<UUID, PerWorldState> playerStateMap = new HashMap<>();
+    private static final Map<UUID, Integer> playerManaMap = new HashMap<>();
 
     @Override
     public void onInitializeClient() {
         init();
     }
 
-    public static void onJoin(PlayerProfile player) {
-        String playerName = player.getDisplayName();
-        UUID uuid = playerDataMapping.get(playerName);
+    public static void onJoin(EntityPlayerMP playerMP) {
+        String playerName = playerMP.username;
+        UUID uuid = getUUIDFromMojang(playerName);
 
-        if (uuid == null) {
-            uuid = getUUIDFromMojang(playerName);
-            if (uuid != null) {
-                playerDataMapping.put(playerName, uuid);
-                System.out.println("Player Data Cached: Username - " + playerName + ", UUID - " + uuid);
+        if (uuid != null) {
+            playerDataMapping.put(playerName, uuid);
+            System.out.println("Player Data Cached: Username - " + playerName + ", UUID - " + uuid);
 
-                // Create a per-world state for the player
-                PerWorldState perWorldState = new PerWorldState();
-                playerStateMap.put(uuid, perWorldState);
-            }
+            // Create a per-world state for the player
+            PerWorldState perWorldState = new PerWorldState();
+            playerStateMap.put(uuid, perWorldState);
+
+            // Initialize mana value for the player
+            playerManaMap.put(uuid, 0); // Initial mana value
+        } else {
+            System.out.println("Failed to obtain UUID for player: " + playerName);
+            // Create a per-world state for the player without UUID
+            PerWorldState perWorldState = new PerWorldState();
+            playerStateMap.put(UUID.randomUUID(), perWorldState);
         }
     }
 
@@ -54,9 +63,7 @@ public class UUIDHelper implements ClientModInitializer {
 
                 String playerUUID = parseUUIDFromMojangResponse(jsonResponse);
                 if (playerUUID != null) {
-                    UUID uuid = UUID.fromString(insertHyphens(playerUUID));
-                    System.out.println("UUID from Mojang: " + uuid);
-                    return uuid;
+                    return UUID.fromString(insertHyphens(playerUUID));
                 }
             }
         } catch (IOException e) {
@@ -64,6 +71,12 @@ public class UUIDHelper implements ClientModInitializer {
         }
         return null;
     }
+    public static  UUID getPlayerUUIDFor(EntityPlayer player) {
+        String playerName = player.username;
+        return playerDataMapping.get(playerName);
+    }
+
+
 
     private static String parseUUIDFromMojangResponse(String response) {
         try {
@@ -73,6 +86,12 @@ public class UUIDHelper implements ClientModInitializer {
             e.printStackTrace();
         }
         return null;
+    }
+
+    private static String insertHyphens(String input) {
+        return input.substring(0, 8) + "-" + input.substring(8, 12) + "-"
+                + input.substring(12, 16) + "-" + input.substring(16, 20) + "-"
+                + input.substring(20, 32);
     }
 
     public static void init() {
@@ -110,10 +129,26 @@ public class UUIDHelper implements ClientModInitializer {
         return false;
     }
 
+    public static void setMana(UUID uuid, String worldName, int mana) {
+        PerWorldState perWorldState = playerStateMap.get(uuid);
+        if (perWorldState != null) {
+            perWorldState.setMana(worldName, mana);
+        }
+    }
+
+    public static int getMana(UUID uuid, String worldName) {
+        PerWorldState perWorldState = playerStateMap.get(uuid);
+        if (perWorldState != null) {
+            return perWorldState.getMana(worldName);
+        }
+        return 0;
+    }
+
     // A simple class to represent per-world state for a player
     private static class PerWorldState {
         private Map<String, Integer> playerScores = new HashMap<>();
         private Map<String, Boolean> playerStatus = new HashMap<>();
+        private Map<String, Integer> playerMana = new HashMap<>();
 
         public void setScore(String worldName, int score) {
             playerScores.put(worldName, score);
@@ -130,11 +165,15 @@ public class UUIDHelper implements ClientModInitializer {
         public boolean getStatus(String worldName) {
             return playerStatus.getOrDefault(worldName, false);
         }
-    }
 
-    private static String insertHyphens(String input) {
-        return input.substring(0, 8) + "-" + input.substring(8, 12) + "-"
-                + input.substring(12, 16) + "-" + input.substring(16, 20) + "-"
-                + input.substring(20, 32);
+        public void setMana(String worldName, int mana) {
+            playerMana.put(worldName, mana);
+        }
+
+        public int getMana(String worldName) {
+            return playerMana.getOrDefault(worldName, 0);
+        }
+
     }
 }
+
